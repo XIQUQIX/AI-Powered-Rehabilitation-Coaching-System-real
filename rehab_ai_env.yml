@@ -64,6 +64,9 @@ dependencies:
       - accelerate>=0.20.0
       - bitsandbytes>=0.41.0
 
+      # --- Cache / Performance ---
+      - diskcache>=5.0.0
+
       # --- Optional: NLP ---
       - spacy>=3.5.0
 
