@@ -93,34 +93,40 @@ conda deactivate
 AI-Powered-Rehabilitation-Coaching-System/
 │
 ├── README.md                        # This file — system overview
+├── LICENSE                          # Project license
 ├── rehab_ai_env.yml                 # Conda environment specification
 ├── .env / .env.example              # Environment variables (API keys, model configs)
-├── .gitignore                       # Ensure chroma_db & .env are ignored
+├── .gitignore                       # Git ignore rules
 │
-├── data/
-│   ├── pt_guideline_data/           # Physical therapy guidelines & protocols
-│   ├── chroma_db/                   # Vector database (gitignored)
-│   └── exercise_cache/              # Pre-computed Tier 1 response JSONs
+├── cache/                           # Cached responses & precomputed data
+│   └── tier1_responses/             # Tier 1 cached coaching responses
+│
+├── figures/                         # Project visualizations & diagrams
 │
 ├── notebooks/                       # Jupyter notebooks for exploration & evaluation
 │   ├── llm_comprehensive_evaluation.ipynb
 │   ├── validated_test_questions.json
 │   └── evaluation_results/
+│       ├── aggregate_metrics.csv
+│       ├── EVALUATION_SUMMARY.md
+│       └── *.csv                    # Detailed model evaluation results
 │
 ├── src/                             # Production code
 │   │
 │   ├── cv/                          # Computer Vision pipeline
 │   │   ├── __init__.py
-│   │   ├── pose_estimator.py        # MediaPipe / OpenPose wrapper
-│   │   ├── depth_estimator.py       # Depth Anything integration
-│   │   ├── fusion.py                # 2D pose + depth → 3D
-│   │   └── schemas.py               # CoachingEvent dataclass / Pydantic models
+│   │   ├── extract_pose_cache.py    # Extract pose data from video cache
+│   │   ├── infer_stream.py          # Real-time pose inference on video stream
+│   │   ├── precompute_memmap.py     # Precompute pose data to memory-mapped files
+│   │   └── train_from_memmap.py     # Train models from precomputed pose data
 │   │
 │   ├── integration/                 # Integration layer (CV → LLM bridge)
 │   │   ├── __init__.py
-│   │   ├── event_filter.py          # Temporal filtering, severity scoring
-│   │   ├── deduplicator.py          # Prevents repetitive coaching cues
-│   │   └── router.py                # Routes to Tier 1 / 2 / 3
+│   │   ├── integration_layer.py     # Core temporal filtering & routing logic
+│   │   ├── graph.py                 # LangGraph workflow integration
+│   │   ├── state.py                 # State management for integration layer
+│   │   ├── main.py                  # Entry point for integration pipeline
+│   │   └── README.md                # Integration layer documentation
 │   │
 │   ├── rag/                         # Retrieval-Augmented Generation
 │   │   ├── __init__.py
@@ -138,8 +144,8 @@ AI-Powered-Rehabilitation-Coaching-System/
 │   │
 │   ├── feedback/                    # Feedback generation & delivery
 │   │   ├── __init__.py
-│   │   ├── tier1_cache.py           # Load/serve pre-computed audio cues
-│   │   ├── tier2_generator.py       # RAG + GPT-4o-mini generation
+│   │   ├── tier1_cache.py           # Load/serve pre-computed responses
+│   │   ├── tier2_generator.py       # RAG + LLM generation
 │   │   ├── tier3_reasoner.py        # Full agent reasoning pass
 │   │   └── delivery.py              # Timing logic (immediate / rep-end / rest)
 │   │
@@ -148,11 +154,14 @@ AI-Powered-Rehabilitation-Coaching-System/
 │       ├── config.py                # Load .env, model names, thresholds
 │       └── logging.py               # Logging utilities
 │
-├── tests/                           # Unit & integration tests
-│   ├── test_event_filter.py
-│   ├── test_retriever.py
-│   ├── test_agents.py
-│   └── test_tier_routing.py
+├── tests/                           # Testing suite
+│   ├── test_integration.py          # Integration layer test runner
+│   ├── test_tune_thresholds.py      # Threshold tuning analyzer
+│   ├── test_visualize.py            # Visualization generator
+│   ├── generate_synthetic_data.py   # Generate synthetic test data
+│   ├── quick_start_test.sh          # Automated test pipeline
+│   ├── TEST_README.md               # Comprehensive testing guide
+│   ├── tuned_config.json            # Validated threshold configuration
 │
 ├── scripts/                         # One-off runnable scripts
 │   ├── ingest_pt_data.py            # Populate ChromaDB with PT guidelines
@@ -160,7 +169,6 @@ AI-Powered-Rehabilitation-Coaching-System/
 │   └── run_demo.py                  # End-to-end demo runner
 │
 └── docs/
-    ├── architecture.html            # System architecture & design
     └── api_contracts.md             # CV ↔ Integration ↔ LLM interface specs
 ```
 
