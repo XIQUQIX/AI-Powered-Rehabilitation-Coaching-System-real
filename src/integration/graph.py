@@ -3,9 +3,11 @@ LangGraph workflow for coaching orchestration
 Handles: Tier routing → LLM processing → Response delivery
 """
 
-import anthropic
 from langgraph.graph import StateGraph, END
-from state import CoachingState
+try:
+    from .state import CoachingState
+except ImportError:
+    from state import CoachingState
 import time
 
 def enrich_context_node(state: CoachingState) -> CoachingState:
@@ -617,7 +619,6 @@ def progress_tracking_node(state: CoachingState) -> CoachingState:
     # This would normally aggregate across all events in session
     state["session_summary"] = {
         "total_events": len(state.get("coaching_history", [])) + 1,
-        "total_events": state.get("coaching_history", []).count + 1 if "coaching_history" in state else 1,
         "mistakes_coached": [tracking_record["mistake_type"]],
         "tier_breakdown": {
             tier_used: 1

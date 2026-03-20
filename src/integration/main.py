@@ -1,11 +1,14 @@
-"""
-Main integration loop: CV Stream → IntegrationLayer → LangGraph → Delivery
-This is the entry point that ties everything together
-"""
+"""Main integration loop: CV Stream -> IntegrationLayer -> optional LangGraph."""
 
+import argparse
+import gzip
 import json
-from integration_layer import IntegrationLayer, Config
-from graph import create_coaching_graph
+from pathlib import Path
+
+try:
+    from .integration_layer import IntegrationLayer, Config
+except ImportError:
+    from integration_layer import IntegrationLayer, Config
 
 
 def main():
@@ -51,23 +54,39 @@ def main():
     
     print("[Setup] ✅ All components ready!\n")
     
+    args = parse_args()
+
     # ==========================================
     # STEP 2: LOAD CV OUTPUT
     # ==========================================
-    
-    # TODO: Replace with your actual CV output
-    # For now, using mock data
-    
+
     print("[CV] Loading CV output stream...")
-    
-    # Option A: Load from file
-    # with open('path/to/cv_output.jsonl') as f:
-    #     cv_frames = [json.loads(line) for line in f]
-    
-    # Option B: Mock data for testing
-    cv_frames = generate_mock_cv_frames()
-    
+
+    if args.cv_jsonl:
+        cv_frames = load_cv_output_from_file(args.cv_jsonl)
+        print(f"[CV] Source: {args.cv_jsonl}")
+    else:
+        cv_frames = generate_mock_cv_frames()
+        print("[CV] Source: built-in mock frames")
+
+    if args.max_frames > 0:
+        cv_frames = cv_frames[:args.max_frames]
+
     print(f"[CV] Loaded {len(cv_frames)} frames\n")
+
+    coaching_graph = None
+    if args.use_langgraph:
+        print("[Setup] Building LangGraph workflow...")
+        try:
+            try:
+                from .graph import create_coaching_graph
+            except ImportError:
+                from graph import create_coaching_graph
+            coaching_graph = create_coaching_graph()
+            print("[Setup] LangGraph enabled")
+        except Exception as e:
+            print(f"[Setup] LangGraph unavailable ({e}); falling back to integration-only mode")
+            args.use_langgraph = False
     
     # ==========================================
     # STEP 3: MAIN PROCESSING LOOP
@@ -106,29 +125,41 @@ def main():
         print(f"Routing: {coaching_event['tier']} ({coaching_event['routing_reason']})")
         print()
         
-        # STEP 3C: LangGraph processing
-        print(f"[LangGraph] Starting orchestration...")
-        
-        initial_state = {
-            "coaching_event": coaching_event,
-            "session_id": integration_layer.session_id,
-            "coaching_history": integration_layer.coaching_history
-        }
-        
-        # Invoke LangGraph
-        final_state = coaching_graph.invoke(initial_state)
-        
-        # STEP 3D: Record completion in IntegrationLayer
-        integration_layer.record_coaching_complete(
-            coaching_event,
-            final_state['feedback_audio'],
-            final_state['tier_used']
-        )
-        
-        print(f"[Result] ✅ Coaching delivered")
-        print(f"  Tier: {final_state['tier_used']}")
-        print(f"  Latency: {final_state.get('latency_ms', 0):.0f}ms")
-        print(f"  Message: \"{final_state['feedback_audio']}\"")
+        # STEP 3C: Optional LangGraph processing
+        if args.use_langgraph and coaching_graph is not None:
+            print("[LangGraph] Starting orchestration...")
+
+            initial_state = {
+                "coaching_event": coaching_event,
+                "session_id": integration_layer.session_id,
+                "coaching_history": integration_layer.coaching_history,
+                "cache": integration_layer.cache,
+                "tier": coaching_event.get("tier"),
+                "cache_key": coaching_event.get("cache_key"),
+                "routing_reason": coaching_event.get("routing_reason"),
+            }
+
+            final_state = coaching_graph.invoke(initial_state)
+
+            integration_layer.record_coaching_complete(
+                coaching_event,
+                final_state["feedback_audio"],
+                final_state["tier_used"],
+            )
+
+            print("[Result] ✅ Coaching delivered")
+            print(f"  Tier: {final_state['tier_used']}")
+            print(f"  Latency: {final_state.get('latency_ms', 0):.0f}ms")
+            print(f"  Message: \"{final_state['feedback_audio']}\"")
+        else:
+            # Integration-only mode: show exactly what the integration layer emits.
+            integration_layer.record_coaching_complete(
+                coaching_event,
+                response="(integration-only mode)",
+                tier=coaching_event["tier"],
+            )
+            print("[Result] ✅ Integration event emitted (no LangGraph)")
+            print(f"  Event JSON: {json.dumps(coaching_event)}")
         print()
     
     # ==========================================
@@ -238,11 +269,35 @@ def load_cv_output_from_file(filepath: str):
     """
     frames = []
     
-    with open(filepath, 'r') as f:
+    path = Path(filepath)
+    opener = gzip.open if path.suffix == ".gz" else open
+
+    with opener(path, 'rt') as f:
         for line in f:
             if line.strip():  # Skip empty lines
                 frame = json.loads(line)
                 frames.append(frame)
+    def parse_args() -> argparse.Namespace:
+        ap = argparse.ArgumentParser(description="Run CV -> integration pipeline")
+        ap.add_argument(
+            "--cv-jsonl",
+            type=str,
+            default="",
+            help="Path to infer_stream output (.jsonl or .jsonl.gz). If omitted, uses mock frames.",
+        )
+        ap.add_argument(
+            "--max-frames",
+            type=int,
+            default=0,
+            help="Limit number of input frames for quick tests (0 = all).",
+        )
+        ap.add_argument(
+            "--use-langgraph",
+            action="store_true",
+            help="Run full LangGraph orchestration after integration filtering.",
+        )
+        return ap.parse_args()
+
     
     return frames
 
