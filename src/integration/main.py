@@ -53,12 +53,8 @@ def main():
         config.MIN_CONFIDENCE = 0.25
         config.MIN_DURATION_SECONDS = 0.5
         config.MIN_COACHING_INTERVAL = 2
-        config.RE_COACHING_THRESHOLD = 5
+        config.RE_COACHING_THRESHOLD = 15
     
-    # Initialize IntegrationLayer
-    session_id = "test_session_123"
-    integration_layer = IntegrationLayer(session_id=session_id, config=config)
-
     print(
         "[Setup] Thresholds "
         f"(window_frames={config.WINDOW_SIZE_FRAMES}, "
@@ -67,12 +63,18 @@ def main():
         f"min_confidence={config.MIN_CONFIDENCE}, "
         f"min_duration_s={config.MIN_DURATION_SECONDS})"
     )
-    
+
     # Initialize ground-truth fallback library
     print("[Setup] Loading ground-truth coaching library...")
     gt_library_path = "data/ground_truth_coaching_cues.json"
     gt_library = GroundTruthLibrary(gt_library_path)
     print(f"[Setup] Ground-truth library: {len(gt_library)} pairs loaded")
+
+    # Initialize IntegrationLayer with ground-truth for dynamic cache promotion
+    session_id = "test_session_123"
+    integration_layer = IntegrationLayer(
+        session_id=session_id, config=config, gt_library=gt_library
+    )
 
     # Populate cache with default patterns
     print("[Setup] Populating Tier 1 cache...")
@@ -126,6 +128,33 @@ def main():
         except Exception as e:
             print(f"[Setup] LangGraph unavailable ({e}); falling back to integration-only mode")
             args.use_langgraph = False
+<<<<<<< HEAD
+=======
+
+    # ── SessionRunner (preferred full-stack path) ───────────────────────────
+    global _session_runner
+    if args.session_runner:
+        print("[Setup] Initialising SessionRunner...")
+        try:
+            try:
+                from src.pipeline.session_runner import SessionRunner
+            except ImportError:
+                import sys
+                sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+                from src.pipeline.session_runner import SessionRunner
+            patient_profile = {
+                "patient_id": args.patient_id,
+                "injury": args.injury,
+                "session_number": 1,
+            }
+            _session_runner = SessionRunner(patient_profile=patient_profile)
+            # Share integration layer cache with the coaching agent for Tier 1 lookups
+            _session_runner._coaching_agent.cache = integration_layer.cache
+            print(f"[Setup] SessionRunner ready (patient={args.patient_id}, injury={args.injury})")
+        except Exception as e:
+            print(f"[Setup] SessionRunner unavailable ({e}); falling back to --use-langgraph / integration-only mode")
+            args.session_runner = False
+>>>>>>> d6f2ad1 (feat: Implement Tier 1 cache builder and integrate with coaching agent + decreased Tier 3 reliance)
     
     # ==========================================
     # STEP 3: MAIN PROCESSING LOOP
